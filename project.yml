@@ -1,0 +1,247 @@
+name: iOSProjectBase
+
+############
+# Schemes
+############
+
+configs:
+  Develop Debug: debug
+  Staging Debug: debug
+  Production Debug: debug
+  Develop Release: release
+  Staging Release: release
+  Production Release: release
+configFiles:
+  Develop Debug: Configurations/developdebug.xcconfig
+  Staging Debug: Configurations/stagingdebug.xcconfig
+  Production Debug: Configurations/productiondebug.xcconfig
+  Develop Release: Configurations/develop.xcconfig
+  Staging Release: Configurations/staging.xcconfig
+  Production Release: Configurations/production.xcconfig
+schemes:
+  iOSProjectBase:
+    build:
+      targets:
+        iOSProjectBase: all
+    run:
+      config: Develop Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: YES
+        -FIRDebugDisabled: YES
+    test:
+      config: Develop Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: YES
+        -FIRDebugDisabled: YES
+      gatherCoverageData: true
+      targets:
+        - name: iOSProjectBaseTests
+          parallelizable: true
+          randomExecutionOrder: true
+        - name: iOSProjectBaseUITests
+          parallelizable: true
+          randomExecutionOrder: true
+    profile:
+      config: Develop Release
+    analyze:
+      config: Develop Debug
+    archive:
+      config: Develop Release
+      revealArchiveInOrganizer: false
+  iOSProjectBase-staging:
+    build:
+      targets:
+        iOSProjectBase: all
+    run:
+      config: Staging Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: YES
+        -FIRDebugDisabled: YES
+    test:
+      config: Staging Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: YES
+        -FIRDebugDisabled: YES
+      gatherCoverageData: true
+      targets:
+        - name: iOSProjectBaseTests
+          parallelizable: true
+          randomExecutionOrder: true
+        - name: iOSProjectBaseUITests
+          parallelizable: true
+          randomExecutionOrder: true
+    profile:
+      config: Staging Release
+    analyze:
+      config: Staging Debug
+    archive:
+      config: Staging Release
+      revealArchiveInOrganizer: true
+  iOSProjectBase-release:
+    build:
+      targets:
+        iOSProjectBase: all
+    run:
+      config: Production Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: NO
+    test:
+      config: Production Debug
+      commandLineArguments:
+        -FIRAnalyticsDebugEnabled: YES
+      gatherCoverageData: true
+      targets:
+        - name: iOSProjectBaseTests
+          parallelizable: true
+          randomExecutionOrder: true
+        - name: iOSProjectBaseUITests
+          parallelizable: true
+          randomExecutionOrder: true
+    profile:
+      config: Production Release
+    analyze:
+      config: Production Debug
+    archive:
+      config: Production Release
+      revealArchiveInOrganizer: true
+
+############
+# Options
+############
+
+options:
+  bundleIdPrefix: com.kino-puehddby
+  developmentLanguage: ja
+  deploymentTarget:
+    iOS: 14.0
+  xcodeVersion: 12.2
+  generateEmptyDirectories: true
+  groupOrdering:
+    - order: [iOSProjectBase, Configurations]
+    - pattern: "iOSProjectBase"
+      order: [Storyboard, ViewController, View, Redux, Model, Resources, Supporting Files, Preview Content]
+    - pattern: "Redux"
+      order: [Store, State, Action, Reducer, Middleware]
+
+############
+# Settings
+############
+
+settings:
+  base:
+    IPHONEOS_DEPLOYMENT_TARGET: 14.0
+    TARGETED_DEVICE_FAMILY: 1
+    SWIFT_VERSION: 5.0
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    VERSIONING_SYSTEM: apple-generic
+
+############
+# Targets
+############
+
+targets:
+  iOSProjectBase:
+    type: application
+    platform: iOS
+    deploymentTarget: 14.0
+    attributes:
+      ProvisioningStyle: Manual
+    sources:
+      - iOSProjectBase
+
+      ############
+      # SwiftGen
+      ############
+      - path: "iOSProjectBase/Storyboard"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/View"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/ViewController"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Model"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Redux/Action"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Redux/Middleware"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Redux/Reducer"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Redux/State"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Redux/Store"
+        createIntermediateGroups: true
+        type: group
+      - path: "iOSProjectBase/Resources/Generated/StoryboardScenes.swift"
+        optional: true
+        createIntermediateGroups: true
+      - path: "iOSProjectBase/Resources/Generated/StoryboardSegues.swift"
+        optional: true
+        createIntermediateGroups: true
+      - path: "iOSProjectBase/Resources/Generated/LocalizableStrings.swift"
+        optional: true
+        createIntermediateGroups: true
+      - path: "iOSProjectBase/Resources/Assets.xcassets"
+        optional: true
+        createIntermediateGroups: true
+      - path: "iOSProjectBase/Resources/Strings/Localizable.strings"
+        optional: true
+        createIntermediateGroups: true
+
+    scheme:
+      testTargets:
+        - iOSProjectBaseTests
+        - iOSProjectBaseUITests
+    preBuildScripts: # Build Phase（before Compile Sources）
+      - script: ${PODS_ROOT}/SwiftGen/bin/swiftgen
+        name: Run SwiftGen
+        outputFiles:
+          - $(SRCROOT)/iOSProjectBase/Resources/Generated/LocalizableStrings.swift
+          - $(SRCROOT)/iOSProjectBase/Resources/Generated/StoryboardScenes.swift
+          - $(SRCROOT)/iOSProjectBase/Resources/Generated/StoryboardSegues.swift
+          - $(SRCROOT)/iOSProjectBase/Resources/Generated/Assets.swift
+    postCompileScripts:
+      - script: |
+          if which swiftlint >/dev/null; then
+            swiftlint
+          else
+            echo "warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint"
+          fi
+        name: Run SwiftLint
+    settings:
+      base:
+        INFOPLIST_FILE: iOSProjectBase/Supporting Files/Info.plist
+    dependencies:
+      - carthage: RxSwift
+      - carthage: ReSwift
+      - carthage: RxCocoa
+      - carthage: RxRelay
+  iOSProjectBaseTests:
+    type: bundle.unit-test
+    platform: iOS
+    attributes:
+      ProvisioningStyle: Automatic
+      DevelopmentTeam: P55D3D23US
+    sources: iOSProjectBaseTests
+    dependencies:
+      - target: iOSProjectBase
+    settings:
+      INFOPLIST_FILE: iOSProjectBaseTests/Supporting Files/Info.plist
+  iOSProjectBaseUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    attributes:
+      ProvisioningStyle: Automatic
+      DevelopmentTeam: P55D3D23US
+    sources: iOSProjectBaseUITests
+    dependencies:
+      - target: iOSProjectBase
+    settings:
+      INFOPLIST_FILE: iOSProjectBaseUITests/Supporting Files/Info.plist

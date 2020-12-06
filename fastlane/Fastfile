@@ -1,0 +1,227 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#     https://docs.fastlane.tools/actions
+# For a list of all available plugins, check out
+#     https://docs.fastlane.tools/plugins/available-plugins
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+fastlane_version '2.168.0'
+
+default_platform :ios
+
+before_all do |lane|
+  case lane
+  when :release
+    ENV['ENV'] = 'production'
+  when :beta
+    ENV['ENV'] = 'staging'
+  else
+    ENV['ENV'] = 'development'
+  end
+end
+
+platform :ios do
+  #################
+  # Public Lane
+  #################
+
+  desc 'Runs all tests'
+  lane :test do
+    case ENV['ENV']
+    when 'production'
+      scan(scheme: 'iOSProjectBase-release')
+    when 'staging'
+      scan(scheme: 'iOSProjectBase-staging')
+    when 'development'
+      scan(scheme: 'iOSProjectBase')
+    end
+  end
+
+  desc 'Build for Scheme'
+  lane :build do
+    # install_lib
+    setup_cirtificates
+    sync_xcode_signing
+
+    case ENV['ENV']
+    when 'production'
+      gym_for_scheme(
+        scheme: 'iOSProjectBase-release',
+        configuration: 'Production Release',
+        export_method: 'app-store'
+      )
+    when 'staging'
+      gym_for_scheme(
+        scheme: 'iOSProjectBase-staging',
+        configuration: 'Staging Release',
+        export_method: 'ad-hoc'
+      )
+    when 'development'
+      gym_for_scheme(
+        scheme: 'iOSProjectBase',
+        configuration: 'Develop Release',
+        export_method: 'development'
+      )
+    end
+  end
+
+  desc 'setup cirtificates'
+  lane :setup_cirtificates do
+    if is_ci?
+      create_keychain(
+        name: 'login.keychain',
+        password: ENV['MATCH_PASSWORD'],
+        timeout: 3600
+      )
+
+      unlock_keychain(
+        path: '~/Library/Keychains/login.keychain',
+        password: ENV['MATCH_PASSWORD']
+      )
+    end
+
+    case ENV['ENV']
+    when 'production'
+      match(type: 'appstore', readonly: is_ci)
+    when 'staging'
+      match(type: 'adhoc', readonly: is_ci)
+    else
+      match(type: 'development', readonly: is_ci)
+    end
+  end
+
+  desc 'sync xcode signing'
+  lane :sync_xcode_signing do
+    configuration_patterns = [
+      ['Production Debug', 'Production Release'],
+      ['Staging Debug', 'Staging Release'],
+      ['Develop Debug', 'Develop Release']
+    ]
+
+    configuration_patterns.each do |configurations|
+      profile_name =
+        case configurations
+        when ['Production Debug', 'Production Release']
+          "match AppStore #{ENV['APP_IDENTIFIER']}"
+        when ['Staging Debug', 'Staging Release']
+          "match AdHoc #{ENV['APP_IDENTIFIER']}"
+        when ['Develop Debug', 'Develop Release']
+          "match Development #{ENV['APP_IDENTIFIER']}"
+        end
+
+      code_sign_identity =
+        case configurations
+        when ['Production Debug', 'Production Release'], ['Staging Debug', 'Staging Release']
+          'Apple Distribution'
+        when ['Develop Debug', 'Develop Release']
+          'Apple Development'
+        end
+
+      update_code_signing_settings(
+        path: './iOSProjectBase.xcodeproj',
+        use_automatic_signing: false,
+        team_id: ENV['TEAM_ID'],
+        targets: ['iOSProjectBase'],
+        build_configurations: configurations,
+        code_sign_identity: code_sign_identity,
+        profile_name: profile_name,
+        bundle_identifier: ENV['APP_IDENTIFIER']
+      )
+    end
+  end
+
+  desc 'deploy to TestFlight'
+  lane :beta do
+    build
+    increment_build_and_version_number
+    pilot(
+      skip_submission: true,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc 'deploy to app store connect'
+  lane :release do
+    build
+    increment_build_and_version_number
+    deliver
+  end
+
+  #################
+  # Private Lane
+  #################
+
+  desc 'gym for scheme'
+  private_lane :gym_for_scheme do |options|
+    scheme = options[:scheme] || 'iOSProjectBase'
+    configuration = options[:configuration] || 'Develop Release'
+    xcode_workspace_path = './iOSProjectBase.xcworkspace'
+    export_method = options[:export_method] || 'development'
+    output_directory = "./build/ipa/#{ENV['ENV']}/"
+    output_name = 'iOSProjectBase.ipa'
+    include_bitcode = ENV['ENV'] != 'development'
+
+    build_ios_app(
+      scheme: scheme,
+      configuration: configuration,
+      workspace: xcode_workspace_path,
+      export_method: export_method,
+      export_xcargs: '-allowProvisioningUpdates',
+      output_directory: output_directory,
+      output_name: output_name,
+      include_bitcode: include_bitcode
+    )
+  end
+
+  desc 'install libraries'
+  private_lane :install_lib do
+    cocoapods(try_repo_update_on_error: true)
+    carthage(
+      command: 'bootstrap',
+      use_binaries: false,
+      platform: 'iOS',
+      cache_builds: true
+    )
+  end
+
+  desc 'git commit & push'
+  private_lane :commit_push do |options|
+    git_commit(path: './*', message: options[:message])
+    push_to_git_remote
+  end
+
+  desc 'increment build & version number'
+  private_lane :increment_build_and_version_number do
+    ensure_git_status_clean
+
+    case ENV['ENV']
+    when 'production'
+      increment_build_number(build_number: app_store_build_number + 1)
+      bump_type = UI.select('3: ', ['major', 'minor', 'patch'])
+      increment_version_number(bump_type: bump_type)
+      add_git_tag(prefix: 'v', tag: get_version_number)
+    when 'staging'
+      increment_build_number(build_number: latest_testflight_build_number + 1)
+    end
+
+    commit_push(message: "build number updated: #{get_build_number} & version number updated: #{get_version_number}")
+  end
+end
+
+error do |lane, exception, options|
+  error_message = "`#{lane}` hass failed.\nenvironment: `#{ENV['ENV']}`\nerror: #{exception.message}"
+
+  if options[:debug]
+    puts error_message
+  else
+    slack(
+      success: false,
+      message: error_message,
+      icon_url: 'https://fastlane.tools/assets/img/fastlane_icon.png',
+      slack_url: ENV['SLACK_WEBHOOK_URL_FOR_FASTLANE']
+    )
+  end
+end
